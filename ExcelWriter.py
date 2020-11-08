@@ -1,6 +1,6 @@
 from openpyxl import Workbook
 from openpyxl import load_workbook
-from openpyxl.styles import Font, Color
+from openpyxl.styles import Font, Color, Alignment
 import datetime
 
 class ExcelWriter:
@@ -16,6 +16,13 @@ class ExcelWriter:
         work_sheet.cell(2, 7).value = "Friday"
         work_sheet.cell(2, 8).value = "Saturday"
         work_sheet.cell(2, 9).value = "Sunday"
+
+    def __apply_style(self, work_sheet):
+        iterator = 3
+        while work_sheet.cell(iterator, 2).value is not None:
+            for column_iterator in range(3, 12):
+                work_sheet.cell(iterator, column_iterator).alignment = Alignment(wrap_text=True)
+            iterator = iterator + 1
 
     def __get_worksheet(self, work_book):
         activityLogSheetName = "Activity Log"
@@ -73,7 +80,7 @@ class ExcelWriter:
             value_from_cell = work_sheet["B" + str(iterator)].value
             date_from_cell = datetime.datetime.strptime(str(value_from_cell), "%Y-%m-%d").date()
             if date_from_cell in date_activities_map:
-                print("week = {} workouts = {}".format(date_from_cell, len(date_activities_map[date_from_cell])))
+                # print("week = {} workouts = {}".format(date_from_cell, len(date_activities_map[date_from_cell])))
                 for activity in date_activities_map[date_from_cell]:
                     date = str(activity.start_date)[0:10]
                     date_formated = datetime.datetime.strptime(str(date), "%Y-%m-%d").date()
@@ -82,14 +89,14 @@ class ExcelWriter:
                         work_sheet.cell(iterator, 3 + day_of_the_week.days).value = activity.name
             iterator = iterator + 1
 
-    # def apply_style(self):
-    #     cell.style.alignment.wrap_text=True
     def create_and_fill_tables(self, date_activities_map):
         fileName = 'activities.xlsx'
         work_book = load_workbook(fileName)
         work_sheet = self.__get_worksheet(work_book)  
         self.__fill_dates_column(work_sheet, self.__get_first_activity_date(date_activities_map))
         self.__fill_columns_with_values(work_sheet, date_activities_map)
+        self.__apply_style(work_sheet)
+
         work_book.save(fileName)
 
     
