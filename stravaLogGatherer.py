@@ -1,10 +1,12 @@
 import argparse
 from ExcelWriter import ExcelWriter
+from ConfigsManager import ConfigsManager
 from stravalib.client import Client
 import datetime
+from AuthorisationStrava import get_access_token
 
-def parse_input_to_map(input_values):
-    client = Client(input_values.auth_token)
+def parse_input_to_map(access_token):
+    client = Client(access_token)
     all_activities = client.get_activities()
     i = 1
     date_activities_map = {}
@@ -25,10 +27,16 @@ def main():
     #Get args
     parser = argparse.ArgumentParser(description='Params to generate result table. Table will be recreated if doesn\'t exist')
     parser.add_argument('-a', '--auth-token', dest='auth_token',
-                   help='An authorisation token for strava', required=True)
+                   help='An authorisation token for strava')
     input_values = parser.parse_args()
-
-    date_activities_map = parse_input_to_map(input_values)
+    access_token = None
+    if input_values.auth_token is not None:
+        access_token = input_values.auth_token
+    else:
+        configs = ConfigsManager().read_configs()
+        access_token = get_access_token(configs)
+    
+    date_activities_map = parse_input_to_map(access_token)
     ExcelWriter().create_and_fill_tables(date_activities_map)
 
 
