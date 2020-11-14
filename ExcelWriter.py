@@ -117,9 +117,9 @@ class ExcelWriter:
                 calories_burnt += calories
                 comment_value += "  Calories:" + str(round(calories, 0)) + "\n"
             if activity.average_speed is not None:
-                comment_value += "  Average speed: " + str(float(activity.average_speed * 3.6)) + "km/h\n"
-            if activity.max_speed is not None:
-                comment_value += "  Max speed: " + str(float(activity.max_speed * 3.6)) + "km/h\n"
+                comment_value += "  Average speed: " + str(round(float(activity.average_speed * 3.6), 2)) + "km/h\n"
+            if activity.max_speed is not None and int(activity.max_speed) != 0:
+                comment_value += "  Max speed: " + str(round(float(activity.max_speed * 3.6), 2)) + "km/h\n"
             if activity.moving_time is not None:
                 comment_value += "  Moving time: " + str(activity.moving_time) + "\n"
             if activity.average_heartrate is not None:
