@@ -25,6 +25,7 @@ def parse_input_to_map(access_token):
                 date_activities_map[monday].append({date_formated: [activity]});
         else:
             date_activities_map[monday] = [{date_formated: [activity]}]; # [{"2020-03-03": [Activity]}]
+    print("Success! Activities from strava retrieved, start building table")
     print("Total number of weeks with at least 1 training:" + str(len(date_activities_map)))
     return date_activities_map
 
@@ -43,6 +44,7 @@ def main():
     
     date_activities_map = parse_input_to_map(access_token)
     ExcelWriter().create_and_fill_tables(date_activities_map)
+    print("Table updated, check activities.xlsx")
 
 
 if __name__ == '__main__':

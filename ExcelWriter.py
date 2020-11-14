@@ -5,6 +5,7 @@ from openpyxl.comments import Comment
 from ConfigsManager import ConfigsManager
 import datetime
 from datetime import timedelta
+from openpyxl.utils import units
 import sys
 
 class ExcelWriter:
@@ -26,6 +27,14 @@ class ExcelWriter:
         work_sheet.cell(2, 7).value = "Friday"
         work_sheet.cell(2, 8).value = "Saturday"
         work_sheet.cell(2, 9).value = "Sunday"
+        work_sheet.cell(2, 10).value = "Calories"
+        work_sheet.column_dimensions['C'].width = 25
+        work_sheet.column_dimensions['D'].width = 25
+        work_sheet.column_dimensions['E'].width = 25
+        work_sheet.column_dimensions['F'].width = 25
+        work_sheet.column_dimensions['G'].width = 25
+        work_sheet.column_dimensions['H'].width = 25
+        work_sheet.column_dimensions['I'].width = 25
 
     def __apply_style(self, work_sheet):
         iterator = 3
@@ -56,13 +65,11 @@ class ExcelWriter:
         return first_workout_date
 
     def __fill_dates_column(self, work_sheet, first_workout_date):
-        print("First ever workout:" + str(first_workout_date))
         future_weeks = 4
 
         b3Value = work_sheet["B3"].value
         today = datetime.date.today()
         last_tracked_monday = today + datetime.timedelta(days=7 * future_weeks - today.weekday())
-        print("Last tracked monday" + str(last_tracked_monday))
         if b3Value is not None:
             # Move existing rows down to add place for new weeks on top
             dateFromB3 = datetime.datetime.strptime(str(b3Value), "%Y-%m-%d").date()
@@ -70,10 +77,8 @@ class ExcelWriter:
             while dateFromB3 < last_tracked_monday:
                 dateFromB3 = dateFromB3 + datetime.timedelta(days=7)
                 number_of_weeks = number_of_weeks + 1
-            print(str(dateFromB3) + str(type(dateFromB3)))
             if dateFromB3 != last_tracked_monday:
                 raise ValueError('Error! B3 value is not Monday date')
-            print(number_of_weeks)
             work_sheet.move_range("A3:Z2000", rows=number_of_weeks, cols=0)
         iteration_date = last_tracked_monday
         iterator = 3
@@ -121,14 +126,14 @@ class ExcelWriter:
                 comment_value += "  Average heart rate: " + str(activity.average_heartrate) + "bpm\n"
             if activity.distance is not None:
                 comment_value += "  Distance: " + str(round(float(activity.distance) / 1000, 3)) + "kms\n"
-            if activity.description is not None:
-                print(activity.description)
             comment_value += "\n"
 
 
         #Add comment
-        # if cell.comment is None:
-        cell.comment = Comment(comment_value, "ME", comment_value.count('\n') * 20, 250)
+        if cell.comment is None:
+            cell.comment = Comment(comment_value, "ME")
+            cell.comment.width = units.points_to_pixels(250)
+            cell.comment.height = units.points_to_pixels(comment_value.count('\n') * 20)
         if cell.value is None:
             cell.value = cell_value
         return calories_burnt
@@ -143,18 +148,19 @@ class ExcelWriter:
                 cell = work_sheet.cell(line_number, 3 + day_of_the_week.days)
                 activities_for_day = day_activities[activity_key]
                 calories = 0
-                # if cell.comment is None or cell.value is None or work_sheet.cell(line_number, self.CALORIES_COLUMN) is None:
-                    #If everything filled then there is nothing to do
-                calories = self.__fill_day(cell, activities_for_day)
+                if cell.comment is None or cell.value is None or work_sheet.cell(line_number, self.CALORIES_COLUMN) is None:
+                    # If everything filled then there is nothing to do
+                    calories = self.__fill_day(cell, activities_for_day)
                 if calories_str == '':
                     calories_str = str(int(calories))
                 else:
                     calories_str += "+" + str(int(calories)) 
+                #Looks like there is a bug in recent excel that resets size of comments
+                cell.comment.width = units.points_to_pixels(250)
+                cell.comment.height = units.points_to_pixels(cell.comment.content.count('\n') * 20)
+                
         if work_sheet.cell(line_number, self.CALORIES_COLUMN).value is None:
             work_sheet.cell(line_number, self.CALORIES_COLUMN).value = "=SUM(" + calories_str  + ")"
-        # except:
-        #     print("Unexpected error:", sys.exc_info()[0])
-        #     print("Failed to fill a week " + str(monday_date))
 
     def __fill_columns_with_values(self, work_sheet, date_activities_map):
         iterator = 3

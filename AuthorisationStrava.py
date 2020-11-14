@@ -45,9 +45,12 @@ def get_access_token(configs):
     else:
         #Check if expiration date is still valid
         time_in_seconds_before_expiration = configs[EXPIRES_AT_KEY] - time.time()
-        print(time_in_seconds_before_expiration)
+        #print("token will expire in " + str(time_in_seconds_before_expiration) + " seconds")
         if time_in_seconds_before_expiration < 300:
             update_access_token(configs)
+            print("Making a call to Strava to update auth token")
+        else:
+            print("Auth token in configs should be valid, requesting activities")
     return configs[ACCESS_TOKEN_KEY]
     
     
