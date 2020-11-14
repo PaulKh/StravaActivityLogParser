@@ -10,6 +10,7 @@ REFRESH_TOKEN_KEY = "refresh_token"
 EXPIRES_AT_KEY = "expires_at"
 GRANT_TYPE_KEY = "grant_type"
 
+
 def make_first_authorisation(configs):
     data = {}
     data[CLIENT_ID_KEY] = configs[CLIENT_ID_KEY]
@@ -34,6 +35,7 @@ def update_access_token(configs):
     authorisation_response = response.json()
     print(authorisation_response)
     configs[ACCESS_TOKEN_KEY] = authorisation_response[ACCESS_TOKEN_KEY]
+    configs[EXPIRES_AT_KEY] = authorisation_response[EXPIRES_AT_KEY]
     ConfigsManager().write_configs(configs)
 
 def get_access_token(configs):
@@ -44,7 +46,7 @@ def get_access_token(configs):
         #Check if expiration date is still valid
         time_in_seconds_before_expiration = configs[EXPIRES_AT_KEY] - time.time()
         print(time_in_seconds_before_expiration)
-        if time_in_seconds_before_expiration < 30000:
+        if time_in_seconds_before_expiration < 300:
             update_access_token(configs)
     return configs[ACCESS_TOKEN_KEY]
     

@@ -8,7 +8,6 @@ from AuthorisationStrava import get_access_token
 def parse_input_to_map(access_token):
     client = Client(access_token)
     all_activities = client.get_activities()
-    i = 1
     date_activities_map = {}
     for activity in all_activities:
         date = str(activity.start_date)[0:10]
@@ -16,11 +15,17 @@ def parse_input_to_map(access_token):
         # group activities by weeks with monday date as a key
         monday = date_formated - datetime.timedelta(date_formated.weekday())
         if monday in date_activities_map:
-            date_activities_map[monday].append(activity)
+            date_found = False
+            for day_activity in date_activities_map[monday]:
+                if date_formated in day_activity:
+                    day_activity[date_formated].append(activity)
+                    date_found = True
+                    break
+            if not date_found:
+                date_activities_map[monday].append({date_formated: [activity]});
         else:
-            date_activities_map[monday] = [activity];
-        i = i + 1
-    print(len(date_activities_map))
+            date_activities_map[monday] = [{date_formated: [activity]}]; # [{"2020-03-03": [Activity]}]
+    print("Total number of weeks with at least 1 training:" + str(len(date_activities_map)))
     return date_activities_map
 
 def main():

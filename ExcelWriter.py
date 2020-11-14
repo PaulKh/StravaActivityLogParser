@@ -1,9 +1,19 @@
 from openpyxl import Workbook
 from openpyxl import load_workbook
 from openpyxl.styles import Font, Color, Alignment
+from openpyxl.comments import Comment
+from ConfigsManager import ConfigsManager
 import datetime
+from datetime import timedelta
+import sys
 
 class ExcelWriter:
+    HEIGHT_KEY = "height"
+    WEIGHT_KEY = "weight"
+    AGE_KEY = "age"
+    SEX_KEY = "sex"
+    CALORIES_COLUMN = 10
+
     def __fill_sheet_with_default(self, work_sheet):
         #actually you can, but result is not quaranteed ;)
         red_font = Font(color="FF0000")
@@ -74,22 +84,91 @@ class ExcelWriter:
             iterator = iterator + 1
             iteration_date = iteration_date - datetime.timedelta(days=7)
 
+    #Basal metabolic rate (BMR) is often used interchangeably with resting metabolic rate (RMR)
+    def __compute_bmr(self):
+        if self.configs[self.SEX_KEY] == "M":
+            self.bmr = 88.362 + (13.397 * self.configs[self.WEIGHT_KEY]) + (4.799 * self.configs[self.HEIGHT_KEY]) - (5.677 * self.configs[self.AGE_KEY])
+        else:   
+            self.bmr = 447.593 + (9.247 * self.configs[self.WEIGHT_KEY]) + (3.098 * self.configs[self.HEIGHT_KEY]) - (4.330 * self.configs[self.AGE_KEY])
+
+    #returns a number which is approximate effort estimation
+    def __fill_day(self, cell, activities_for_day):
+        cell_value = ''
+        comment_value = ''
+
+        #Calculate callories and effort
+        calories_burnt = 0.0
+        for activity in activities_for_day: # strava activity objects for a given date
+            comment_value = comment_value + str(activity.type) + ": "
+            cell_value = cell_value + str(activity.type) + ": " + str(activity.name) + "\n"
+            if activity.average_speed is not None and activity.moving_time is not None:
+                calories = 0
+                if activity.type == "Run":  
+                    calories = float(self.bmr * activity.average_speed * 3.6 * activity.moving_time.seconds) / (24 * 3600) 
+                elif activity.type == "Swim":
+                    calories = self.bmr * 8.5 * activity.moving_time.seconds / (24 * 3600) 
+                elif activity.type == "Ride":
+                    calories = float(self.bmr * activity.average_speed * 3.6 * activity.moving_time.seconds) / (24 * 3600 * 3) 
+                calories_burnt += calories
+                comment_value += "  Calories:" + str(round(calories, 0)) + "\n"
+            if activity.average_speed is not None:
+                comment_value += "  Average speed: " + str(float(activity.average_speed * 3.6)) + "km/h\n"
+            if activity.max_speed is not None:
+                comment_value += "  Max speed: " + str(float(activity.max_speed * 3.6)) + "km/h\n"
+            if activity.moving_time is not None:
+                comment_value += "  Moving time: " + str(activity.moving_time) + "\n"
+            if activity.average_heartrate is not None:
+                comment_value += "  Average heart rate: " + str(activity.average_heartrate) + "bpm\n"
+            if activity.distance is not None:
+                comment_value += "  Distance: " + str(round(float(activity.distance) / 1000, 3)) + "kms\n"
+            if activity.description is not None:
+                print(activity.description)
+            comment_value += "\n"
+
+
+        #Add comment
+        # if cell.comment is None:
+        cell.comment = Comment(comment_value, "ME", comment_value.count('\n') * 20, 250)
+        if cell.value is None:
+            cell.value = cell_value
+        return calories_burnt
+
+    def __fill_week(self, work_sheet, line_number, week_activities, monday_date):
+        # try:
+        calories_str = ''
+        for day_activities in week_activities:
+            for activity_key in day_activities.keys():
+                # print(str(activity_key) + " " + str(len(day_activities[activity_key])))
+                day_of_the_week = activity_key - monday_date
+                cell = work_sheet.cell(line_number, 3 + day_of_the_week.days)
+                activities_for_day = day_activities[activity_key]
+                calories = 0
+                # if cell.comment is None or cell.value is None or work_sheet.cell(line_number, self.CALORIES_COLUMN) is None:
+                    #If everything filled then there is nothing to do
+                calories = self.__fill_day(cell, activities_for_day)
+                if calories_str == '':
+                    calories_str = str(int(calories))
+                else:
+                    calories_str += "+" + str(int(calories)) 
+        if work_sheet.cell(line_number, self.CALORIES_COLUMN).value is None:
+            work_sheet.cell(line_number, self.CALORIES_COLUMN).value = "=SUM(" + calories_str  + ")"
+        # except:
+        #     print("Unexpected error:", sys.exc_info()[0])
+        #     print("Failed to fill a week " + str(monday_date))
+
     def __fill_columns_with_values(self, work_sheet, date_activities_map):
         iterator = 3
         while work_sheet["B" + str(iterator)].value is not None:
             value_from_cell = work_sheet["B" + str(iterator)].value
-            date_from_cell = datetime.datetime.strptime(str(value_from_cell), "%Y-%m-%d").date()
-            if date_from_cell in date_activities_map:
-                # print("week = {} workouts = {}".format(date_from_cell, len(date_activities_map[date_from_cell])))
-                for activity in date_activities_map[date_from_cell]:
-                    date = str(activity.start_date)[0:10]
-                    date_formated = datetime.datetime.strptime(str(date), "%Y-%m-%d").date()
-                    day_of_the_week = date_formated - date_from_cell
-                    if work_sheet.cell(iterator, 3 + day_of_the_week.days).value is None:
-                        work_sheet.cell(iterator, 3 + day_of_the_week.days).value = activity.name
+            monday_date = datetime.datetime.strptime(str(value_from_cell), "%Y-%m-%d").date()
+            if monday_date in date_activities_map:
+                # print("week = {} workouts = {}".format(monday_date, len(date_activities_map[monday_date])))
+                self.__fill_week(work_sheet, iterator, date_activities_map[monday_date], monday_date)
             iterator = iterator + 1
 
     def create_and_fill_tables(self, date_activities_map):
+        self.configs = ConfigsManager().read_configs()
+        self.__compute_bmr()
         fileName = 'activities.xlsx'
         work_book = load_workbook(fileName)
         work_sheet = self.__get_worksheet(work_book)  
