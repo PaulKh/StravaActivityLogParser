@@ -8,12 +8,14 @@ from datetime import timedelta
 from openpyxl.utils import units
 import sys
 
+
 class ExcelWriter:
     HEIGHT_KEY = "height"
     WEIGHT_KEY = "weight"
     AGE_KEY = "age"
     SEX_KEY = "sex"
     CALORIES_COLUMN = 10
+    REPORT_COLUMN = 11
 
     def __fill_sheet_with_default(self, work_sheet):
         #actually you can, but result is not quaranteed ;)
@@ -28,6 +30,9 @@ class ExcelWriter:
         work_sheet.cell(2, 8).value = "Saturday"
         work_sheet.cell(2, 9).value = "Sunday"
         work_sheet.cell(2, 10).value = "Calories"
+        work_sheet.cell(2, 11).value = "Report"
+        work_sheet.cell(2, 12).value = "Comments"
+        work_sheet.column_dimensions['B'].width = 15
         work_sheet.column_dimensions['C'].width = 25
         work_sheet.column_dimensions['D'].width = 25
         work_sheet.column_dimensions['E'].width = 25
@@ -35,12 +40,13 @@ class ExcelWriter:
         work_sheet.column_dimensions['G'].width = 25
         work_sheet.column_dimensions['H'].width = 25
         work_sheet.column_dimensions['I'].width = 25
+        work_sheet.column_dimensions['K'].width = 35
 
     def __apply_style(self, work_sheet):
         iterator = 3
         while work_sheet.cell(iterator, 2).value is not None:
             for column_iterator in range(3, 12):
-                work_sheet.cell(iterator, column_iterator).alignment = Alignment(wrap_text=True)
+                work_sheet.cell(iterator, column_iterator).alignment = Alignment(wrap_text=True, vertical='top')
             iterator = iterator + 1
 
     def __get_worksheet(self, work_book):
@@ -96,24 +102,51 @@ class ExcelWriter:
         else:   
             self.bmr = 447.593 + (9.247 * self.configs[self.WEIGHT_KEY]) + (3.098 * self.configs[self.HEIGHT_KEY]) - (4.330 * self.configs[self.AGE_KEY])
 
+    def __fill_week_report(self, week_activities, total_calories_burnt):
+        activities_dict = {}
+        for day_activities in week_activities:
+            for activity_key in day_activities.keys():
+                for activity in day_activities[activity_key]: # strava activity objects for a given date
+                    if activity.type not in activities_dict:
+                        activities_dict[activity.type] = activity
+                    else:
+                        activities_dict[activity.type].moving_time += datetime.timedelta(0, activity.moving_time.seconds)
+                        activities_dict[activity.type].distance += activity.distance
+        result = ""
+        for activity_type, activity in activities_dict.items():    
+            distance = round(float(activity.distance) / 1000, 3)
+            result += activity_type + ":\n"
+            result += "    Total moving time: " + str(activity.moving_time) + "\n"
+            result += "    Distance: " + str(distance) + "kms\n"
+            if activity.type == "Run":  
+                pace_in_seconds = round(activity.moving_time.seconds / distance, 0)
+                extra_zero = "0" if int(pace_in_seconds % 60) < 10 else ""
+                result += "    Average pace: " + str(int(pace_in_seconds / 60)) + ":" + extra_zero + str(int(pace_in_seconds % 60)) + "min/km\n"
+
+        return result
+
+
+
     #returns a number which is approximate effort estimation
     def __fill_day(self, cell, activities_for_day):
         cell_value = ''
         comment_value = ''
 
         #Calculate callories and effort
-        calories_burnt = 0.0
+        calories_burnt = 0
         for activity in activities_for_day: # strava activity objects for a given date
             comment_value = comment_value + str(activity.type) + ": "
             cell_value = cell_value + str(activity.type) + ": " + str(activity.name) + "\n"
-            if activity.average_speed is not None and activity.moving_time is not None:
+            if activity.average_speed is not None and activity.moving_time is not None and activity.distance is not None:
                 calories = 0
                 if activity.type == "Run":  
-                    calories = float(self.bmr * activity.average_speed * 3.6 * activity.moving_time.seconds) / (24 * 3600) 
+                    calories = float(self.bmr * activity.average_speed * 3.6 * activity.moving_time.seconds) / (24 * 3600)
                 elif activity.type == "Swim":
                     calories = self.bmr * 8.5 * activity.moving_time.seconds / (24 * 3600) 
                 elif activity.type == "Ride":
                     calories = float(self.bmr * activity.average_speed * 3.6 * activity.moving_time.seconds) / (24 * 3600 * 3) 
+                    # training_stats.cycling_distance = round(float(activity.distance) / 1000, 3)
+                    # training_stats.cycling_time_in_seconds = activity.moving_time.seconds
                 calories_burnt += calories
                 comment_value += "  Calories:" + str(round(calories, 0)) + "\n"
             if activity.average_speed is not None:
@@ -139,26 +172,28 @@ class ExcelWriter:
         return calories_burnt
 
     def __fill_week(self, work_sheet, line_number, week_activities, monday_date):
-        # try:
         calories_str = ''
+        total_calories_burnt = 0
         for day_activities in week_activities:
             for activity_key in day_activities.keys():
                 # print(str(activity_key) + " " + str(len(day_activities[activity_key])))
                 day_of_the_week = activity_key - monday_date
                 cell = work_sheet.cell(line_number, 3 + day_of_the_week.days)
                 activities_for_day = day_activities[activity_key]
-                calories = 0
+                calories_burnt = 0
                 if cell.comment is None or cell.value is None or work_sheet.cell(line_number, self.CALORIES_COLUMN) is None:
                     # If everything filled then there is nothing to do
-                    calories = self.__fill_day(cell, activities_for_day)
+                    calories_burnt = int(self.__fill_day(cell, activities_for_day))
                 if calories_str == '':
-                    calories_str = str(int(calories))
+                    calories_str = str(calories_burnt)
                 else:
-                    calories_str += "+" + str(int(calories)) 
+                    calories_str += "+" + str(calories_burnt) 
                 #Looks like there is a bug in recent excel that resets size of comments
                 cell.comment.width = units.points_to_pixels(250)
                 cell.comment.height = units.points_to_pixels(cell.comment.content.count('\n') * 20)
-                
+        week_report = self.__fill_week_report(week_activities, total_calories_burnt)
+
+        work_sheet.cell(line_number, self.REPORT_COLUMN).value = week_report
         if work_sheet.cell(line_number, self.CALORIES_COLUMN).value is None:
             work_sheet.cell(line_number, self.CALORIES_COLUMN).value = "=SUM(" + calories_str  + ")"
 
