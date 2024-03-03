@@ -1,3 +1,4 @@
+import logging
 import requests
 from ConfigsManager import ConfigsManager
 import time
@@ -10,7 +11,7 @@ REFRESH_TOKEN_KEY = "refresh_token"
 EXPIRES_AT_KEY = "expires_at"
 GRANT_TYPE_KEY = "grant_type"
 
-
+log = logging.getLogger("APP." + __name__)
 def make_first_authorisation(configs):
     data = {}
     data[CLIENT_ID_KEY] = configs[CLIENT_ID_KEY]
@@ -18,14 +19,14 @@ def make_first_authorisation(configs):
     data[CODE_KEY] = configs[CODE_KEY]
     response = requests.post('https://www.strava.com/api/v3/oauth/token', data=data)
     authorisation_response = response.json()
-    print(authorisation_response)
+    log.info(authorisation_response)
     configs[ACCESS_TOKEN_KEY] = authorisation_response[ACCESS_TOKEN_KEY]
     configs[REFRESH_TOKEN_KEY] = authorisation_response[REFRESH_TOKEN_KEY]
     configs[EXPIRES_AT_KEY] = authorisation_response[EXPIRES_AT_KEY]
     ConfigsManager().write_configs(configs)
 
 def update_access_token(configs):
-    print("update access token")
+    log.info("update access token")
     data = {}
     data[CLIENT_ID_KEY] = configs[CLIENT_ID_KEY]
     data[CLIENT_SECRET_KEY] = configs[CLIENT_SECRET_KEY]
@@ -33,7 +34,7 @@ def update_access_token(configs):
     data[REFRESH_TOKEN_KEY] = configs[REFRESH_TOKEN_KEY]
     response = requests.post('https://www.strava.com/api/v3/oauth/token', data=data)
     authorisation_response = response.json()
-    print(authorisation_response)
+    log.info(authorisation_response)
     configs[ACCESS_TOKEN_KEY] = authorisation_response[ACCESS_TOKEN_KEY]
     configs[EXPIRES_AT_KEY] = authorisation_response[EXPIRES_AT_KEY]
     ConfigsManager().write_configs(configs)
