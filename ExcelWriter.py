@@ -260,15 +260,15 @@ class ExcelWriter:
     def __update_zone_values(self, zone_values: list[float], split):
         if split.average_heartrate and split.moving_time and isinstance(split.moving_time, datetime.timedelta):
             if split.average_heartrate < self.__heart_rate_zones[0]:
-                zone_values[0] += split.moving_time.seconds / 60
+                zone_values[0] += split.moving_time.seconds
             elif split.average_heartrate < self.__heart_rate_zones[1]:
-                zone_values[1] += split.moving_time.seconds / 60
+                zone_values[1] += split.moving_time.seconds
             elif split.average_heartrate < self.__heart_rate_zones[2]:
-                zone_values[2] += split.moving_time.seconds / 60
+                zone_values[2] += split.moving_time.seconds
             elif split.average_heartrate < self.__heart_rate_zones[3]:
-                zone_values[3] += split.moving_time.seconds / 60
+                zone_values[3] += split.moving_time.seconds
             else:
-                zone_values[4] += split.moving_time.seconds / 60
+                zone_values[4] += split.moving_time.seconds
 
     def __fill_effort_levels(self, work_sheet: Worksheet, row: int, week_activities: list[DayActivities]):
         #other recovery time is a specific column that is not a part of strava activities but could be manually filled
@@ -276,6 +276,7 @@ class ExcelWriter:
         if work_sheet.cell(row, self.OTHER_RECOVERY_TIME_COLUMN).value:
             other_recovery_time = self.__to_int(work_sheet.cell(row, self.OTHER_RECOVERY_TIME_COLUMN).value)
         
+        log.debug("Checking if effort recalculations needed for row {row}")
         if work_sheet.cell(row, self.ZONE_1_COLUMN_NUMBER).value is not None and \
             work_sheet.cell(row, self.ZONE_2_COLUMN_NUMBER).value is not None and \
             work_sheet.cell(row, self.ZONE_3_COLUMN_NUMBER).value is not None and \
@@ -287,19 +288,19 @@ class ExcelWriter:
                                     self.__to_int(work_sheet.cell(row, self.ZONE_3_COLUMN_NUMBER).value) + \
                                     self.__to_int(work_sheet.cell(row, self.ZONE_4_COLUMN_NUMBER).value) + \
                                     self.__to_int(work_sheet.cell(row, self.ZONE_5_COLUMN_NUMBER).value)
-            total_time_for_all_activities = other_recovery_time
+            total_time_for_all_activities = other_recovery_time * 60
             
             for day_activities in week_activities:
                 for activity_date in day_activities.keys():
                     for activity in day_activities[activity_date]:
                         #we want to count only activities with average heartrate
                         if activity.moving_time and activity.average_heartrate and isinstance(activity.moving_time, datetime.timedelta):
-                            total_time_for_all_activities += (activity.moving_time.seconds / 60)
-            if self.__are_2_values_close_in_percents(total_time_for_all_activities, total_time_from_cells, 2):
+                            total_time_for_all_activities += activity.moving_time.seconds
+            if self.__are_2_values_close_in_percents(total_time_for_all_activities / 60, total_time_from_cells, 2):
                 log.debug(f"We don't need to fill effort levels, they are already fully filled for row {row}")
                 return
         #In the following code we go through activities 1 by 1 and calculate time spent in each zone
-        zone_values = [other_recovery_time, 0.0, 0.0, 0.0, 0.0]
+        zone_values_in_seconds = [other_recovery_time * 60, 0.0, 0.0, 0.0, 0.0]
         request_to_strava_made = False
         for day_activities in week_activities:
             for activity_date in day_activities.keys():
@@ -312,18 +313,18 @@ class ExcelWriter:
                             #There are many laps we can measure efforts by laps
                             log.info(f"Lap case {activity.name}")
                             for lap in full_activity.laps:
-                                self.__update_zone_values(zone_values, lap)                                    
+                                self.__update_zone_values(zone_values_in_seconds, lap)                                    
                         elif full_activity.splits_metric and isinstance(full_activity.splits_metric, list):
                             #There are more splits than laps, we can measure efforts by splits
                             log.info(f"Splits case {activity.name}")
                             for split in full_activity.splits_metric:
-                                self.__update_zone_values(zone_values, split)
+                                self.__update_zone_values(zone_values_in_seconds, split)
                                         
-        work_sheet.cell(row, self.ZONE_1_COLUMN_NUMBER).value = round(zone_values[0])
-        work_sheet.cell(row, self.ZONE_2_COLUMN_NUMBER).value = round(zone_values[1])
-        work_sheet.cell(row, self.ZONE_3_COLUMN_NUMBER).value = round(zone_values[2])
-        work_sheet.cell(row, self.ZONE_4_COLUMN_NUMBER).value = round(zone_values[3])
-        work_sheet.cell(row, self.ZONE_5_COLUMN_NUMBER).value = round(zone_values[4])
+        work_sheet.cell(row, self.ZONE_1_COLUMN_NUMBER).value = round(zone_values_in_seconds[0] / 60, 1)
+        work_sheet.cell(row, self.ZONE_2_COLUMN_NUMBER).value = round(zone_values_in_seconds[1] / 60, 1)
+        work_sheet.cell(row, self.ZONE_3_COLUMN_NUMBER).value = round(zone_values_in_seconds[2] / 60, 1)
+        work_sheet.cell(row, self.ZONE_4_COLUMN_NUMBER).value = round(zone_values_in_seconds[3] / 60, 1)
+        work_sheet.cell(row, self.ZONE_5_COLUMN_NUMBER).value = round(zone_values_in_seconds[4] / 60, 1)
         if request_to_strava_made:
             log.warn(f"Effort levels filled for row {row}. You can add time sleep to avoid limit request on strava. max 1000/day 100/15min requests")
             self.__apply_style(work_sheet)
